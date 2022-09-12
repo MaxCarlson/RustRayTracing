@@ -1,6 +1,8 @@
 use std::ops::{Index, IndexMut, Add, AddAssign, Sub, SubAssign, Mul, MulAssign, Div, DivAssign};
+use std::fmt;
+use std::fmt::Display;
 
-type FloatT = f64;
+pub type FloatT = f64;
 
 #[derive(Clone, Copy)]
 pub struct Vec3 {
@@ -15,6 +17,46 @@ impl Vec3 {
         Vec3 {
             e: [e0, e1, e2]
         }
+    }
+
+    pub fn x(self) -> FloatT {
+        self[0]
+    }
+
+    pub fn y(self) -> FloatT {
+        self[1]
+    }
+
+    pub fn z(self) -> FloatT {
+        self[2]
+    }
+
+    pub fn dot(self, other: Vec3) -> FloatT {
+        return self.x() * other.x() + self.y() * other.y() + self.z() * other.z()
+    }
+
+    pub fn length(self) -> FloatT {
+        return self.dot(self).sqrt()
+    }
+
+    pub fn cross(self, other: Vec3) -> Vec3 {
+        Vec3 {
+            e: [
+                self.y() * other.z() - self.z() * other.y(),
+                self.z() * other.x() - self.x() * other.z(),
+                self.x() * other.y() - self.y() * other.x()
+            ]
+        }
+    }
+
+    pub fn normalized(self) -> Vec3 {
+        self / self.length()
+    }
+    
+    pub fn format_color(self) -> String {
+        format!("{} {} {}", (255.999 * self.x()) as u64,
+                            (255.999 * self.y()) as u64,
+                            (255.999 * self.z()) as u64)
     }
 }
 
@@ -111,5 +153,10 @@ impl DivAssign<FloatT> for Vec3 {
         *self = Vec3 {
             e: [self[0] / other, self[1] / other, self[2] / other]
         };
+    }
+}
+impl Display for Vec3 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "({}, {}, {})", self[0], self[1], self[2])
     }
 }

@@ -1,6 +1,6 @@
 mod vec;
 use std::io::{stderr, Write};
-use vec::{Vec3};
+use vec::{Vec3, Color, FloatT};
 
 fn main()
 {
@@ -13,20 +13,16 @@ fn main()
 
     for j in (0..IMAGE_HEIGHT).rev()
     {
+        eprint!("\rScanlines remaining {:3}", IMAGE_HEIGHT - j - 1);
+        stderr().flush().unwrap();
+
         for i in 0..IMAGE_WIDTH
         {
-            eprint!("\rScanlines remaining {:3}", IMAGE_HEIGHT - j - 1);
-            stderr().flush().unwrap();
+            let pixel_color = Color::new((i as FloatT) / ((IMAGE_WIDTH - 1) as FloatT),
+                                         (j as FloatT) / ((IMAGE_HEIGHT - 1) as FloatT),
+                                         0.25);
 
-            let r = (i as f64) / ((IMAGE_WIDTH - 1) as f64);
-            let g = (j as f64) / ((IMAGE_HEIGHT - 1) as f64);
-            let b = 0.25;
-
-            let ir = (255.999 * r) as u64;
-            let ig = (255.999 * g) as u64;
-            let ib = (255.999 * b) as u64;
-
-            println!("{} {} {}", ir, ig, ib)
+            println!("{}", pixel_color.format_color());
         }
     }
     eprintln!("Done");
