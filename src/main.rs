@@ -1,24 +1,41 @@
 mod vec;
 mod ray;
+mod hit;
+mod sphere;
+
 use std::io::{stderr, Write};
 use vec::{Vec3, Point3, Color, FloatT};
 use ray::Ray;
+use hit::{Hit, World};
+use sphere::Sphere;
 
-fn ray_color(r: &Ray) -> Color {
-    let unit_direction = r.direction().normalized();
-    let t = 0.5 * (unit_direction.y() + 1.0);
-    (1.0 - t) * Color::new(1.0, 1.0, 1.0) + t * Color::new(0.5, 0.7, 1.0)
+fn ray_color(r: &Ray, world: &World) -> Color {
+
+    if let Some(rec) = world.hit(r, 0.0, FloatT::INFINITY)  {
+        0.5 * (rec.normal + Color::new(1.0, 1.0, 1.0))
+    } else {
+        let unit_dir = r.direction().normalized();
+        let t = 0.5 * (unit_dir.y() + 1.0);
+        (1.0 - t) * Color::new(1.0, 1.0, 1.0) + t * Color::new(0.5, 0.7, 1.0)
+    }
 }
 
+// https://misterdanb.github.io/raytracinginrust/#outputanimage/theppmimageformat
 fn main()
 {
     // Image
     const ASPECT_RATIO: FloatT = 16.0 / 9.0;
-    const IMAGE_WIDTH: u64 = 256;
-    const IMAGE_HEIGHT: u64 = ((256 as FloatT) / ASPECT_RATIO) as u64;
+    const IMAGE_WIDTH: u64 = 1024;
+    const IMAGE_HEIGHT: u64 = ((IMAGE_WIDTH as FloatT) / ASPECT_RATIO) as u64;
+
+    // World
+    let mut world = World::new();
+    world.push(Box::new(Sphere::new(Point3::new(0.0, 0.0, -1.0), 0.5)));
+    world.push(Box::new(Sphere::new(Point3::new(0.0, -100.5, -1.0), 100.0)));
+
 
     // Camera
-    let viewport_height = 2.0;
+    let viewport_height = 10.0;
     let viewport_width = ASPECT_RATIO * viewport_height;
     let focal_length = 1.0;
 
@@ -42,7 +59,7 @@ fn main()
             let v = (j as FloatT) / ((IMAGE_HEIGHT - 1) as FloatT);
 
             let r = Ray::new(origin, lower_left_corner + u * horizontal + v * vertical - origin);
-            let pixel_color = ray_color(&r);
+            let pixel_color = ray_color(&r, &world);
 
             println!("{}", pixel_color.format_color());
         }

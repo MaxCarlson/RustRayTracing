@@ -1,3 +1,13 @@
 image.ppm
 src/.vec.rs.swp
 src/main
+
+
+# Added by cargo
+
+/target
+src/.hit.rs.swp
+src/.main.rs.swo
+src/.main.rs.swp
+src/.ray.rs.swp
+src/.sphere.rs.swp
