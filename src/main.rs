@@ -2,12 +2,16 @@ mod vec;
 mod ray;
 mod hit;
 mod sphere;
+mod camera;
 
 use std::io::{stderr, Write};
+use rand::{thread_rng, Rng};
+
 use vec::{Vec3, Point3, Color, FloatT};
 use ray::Ray;
 use hit::{Hit, World};
 use sphere::Sphere;
+use camera::Camera;
 
 fn ray_color(r: &Ray, world: &World) -> Color {
 
@@ -25,8 +29,9 @@ fn main()
 {
     // Image
     const ASPECT_RATIO: FloatT = 16.0 / 9.0;
-    const IMAGE_WIDTH: u64 = 1024;
+    const IMAGE_WIDTH: u64 = 256;
     const IMAGE_HEIGHT: u64 = ((IMAGE_WIDTH as FloatT) / ASPECT_RATIO) as u64;
+    const SAMPLES_PER_PIXEL: u64 = 100;
 
     // World
     let mut world = World::new();
@@ -35,19 +40,13 @@ fn main()
 
 
     // Camera
-    let viewport_height = 10.0;
-    let viewport_width = ASPECT_RATIO * viewport_height;
-    let focal_length = 1.0;
-
-    let origin = Point3::new(0.0, 0.0, 0.0);
-    let horizontal = Vec3::new(viewport_width, 0.0, 0.0);
-    let vertical = Vec3::new(0.0, viewport_height, 0.0);
-    let lower_left_corner = origin - horizontal / 2.0 - vertical / 2.0 - Vec3::new(0.0, 0.0, focal_length);
+    let cam = Camera::new();
 
     println!("P3");
     println!("{} {}", IMAGE_WIDTH, IMAGE_HEIGHT);
     println!("255");
 
+    let mut rng = thread_rng();
     for j in (0..IMAGE_HEIGHT).rev()
     {
         eprint!("\rScanlines remaining {:3}", IMAGE_HEIGHT - j - 1);
@@ -55,13 +54,18 @@ fn main()
 
         for i in 0..IMAGE_WIDTH
         {
-            let u = (i as FloatT) / ((IMAGE_WIDTH - 1) as FloatT);
-            let v = (j as FloatT) / ((IMAGE_HEIGHT - 1) as FloatT);
+            let mut pixel_color = Color::default();
+            for _ in 0..SAMPLES_PER_PIXEL {
+                let random_u: FloatT = rng.gen();
+                let random_v: FloatT = rng.gen();
 
-            let r = Ray::new(origin, lower_left_corner + u * horizontal + v * vertical - origin);
-            let pixel_color = ray_color(&r, &world);
-
-            println!("{}", pixel_color.format_color());
+                let u = ((i as FloatT) + random_u) / ((IMAGE_WIDTH - 1) as FloatT);
+                let v = ((j as FloatT) + random_v) / ((IMAGE_HEIGHT - 1) as FloatT);
+    
+                let r = cam.get_ray(u, v);
+                pixel_color += ray_color(&r, &world);
+            }
+            println!("{}", pixel_color.format_color(SAMPLES_PER_PIXEL));
         }
     }
     eprintln!("Done");

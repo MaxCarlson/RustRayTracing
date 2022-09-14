@@ -4,7 +4,7 @@ use std::fmt::Display;
 
 pub type FloatT = f64;
 
-#[derive(Clone, Copy)]
+#[derive(Default, Clone, Copy)]
 pub struct Vec3 {
     e: [FloatT; 3]
 }
@@ -53,10 +53,12 @@ impl Vec3 {
         self / self.length()
     }
     
-    pub fn format_color(self) -> String {
-        format!("{} {} {}", (255.999 * self.x()) as u64,
-                            (255.999 * self.y()) as u64,
-                            (255.999 * self.z()) as u64)
+    pub fn format_color(self, samples_per_pixel: u64) -> String {
+        let ir = (256.0 * (self.x() / (samples_per_pixel as FloatT)).clamp(0.0, 0.999)) as u64;
+        let ig = (256.0 * (self.y() / (samples_per_pixel as FloatT)).clamp(0.0, 0.999)) as u64;
+        let ib = (256.0 * (self.z() / (samples_per_pixel as FloatT)).clamp(0.0, 0.999)) as u64;
+
+        format!("{} {} {}", ir, ig, ib)
     }
 }
 
@@ -134,6 +136,16 @@ impl Mul<Vec3> for FloatT {
     fn mul(self, other: Vec3) -> Vec3 {
         Vec3 {
             e: [self * other[0], self * other[1], self * other[2]]
+        }
+    }
+}
+
+impl Mul<Vec3> for u64 {
+    type Output = Vec3;
+
+    fn mul(self, other: Vec3) -> Vec3 {
+        Vec3 {
+            e: [self as FloatT * other[0], self as FloatT * other[1], self as FloatT * other[2]]
         }
     }
 }
