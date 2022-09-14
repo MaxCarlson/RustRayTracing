@@ -58,6 +58,16 @@ impl Vec3 {
     pub fn reflect(self, n: Vec3) -> Vec3 {
         self - 2.0 * self.dot(n) * n
     }
+    
+    // 𝜃′= sin^-1(𝜂/𝜂′⋅sin𝜃)
+    pub fn refract(self, n: Vec3, eta_over_etap: FloatT) -> Vec3 {
+        let cos_theta = ((-1.0) * self).dot(n).min(1.0);
+
+        // 𝐑′⊥ = 𝜂/𝜂′(𝐑+(−𝐑⋅𝐧)𝐧)
+        let r_out_perp = eta_over_etap * (self + cos_theta * n);
+        let r_out_parallel = -(1.0 - r_out_perp.length().powi(2)).abs().sqrt() * n;
+        r_out_perp + r_out_parallel
+    }
 
     pub fn random(r: Range<FloatT>) -> Vec3 {
         let mut rng = thread_rng();
@@ -182,7 +192,7 @@ impl Mul<Vec3> for Vec3 {
 
     fn mul(self, other: Vec3) -> Vec3 {
         Vec3 {
-            e: [self[0] * other[0], self[0] * other[1], self[0] * other[2]]
+            e: [self[0] * other[0], self[1] * other[1], self[2] * other[2]]
         }
     }
 }
