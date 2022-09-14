@@ -1,6 +1,7 @@
 use super::hit::{HitRecord};
 use super::ray::{Ray};
 use super::vec::{Vec3, Color, FloatT};
+use rand::{Rng, thread_rng};
 
 pub trait Scatter {
     fn scatter(&self, r_in: &Ray, rec: &HitRecord) -> Option<(Color, Ray)>;
@@ -37,6 +38,19 @@ impl Lambertian {
     }
 }
 
+impl Dielectric {
+    pub fn new(index_of_refraction: FloatT) -> Dielectric {
+        Dielectric {
+            ir: index_of_refraction
+        }
+    }
+    fn reflectance(cosine: f64, ref_idx: f64) -> f64 {
+        // Use Schlick's approximation for reflectance
+        let r0 = ((1.0 - ref_idx) / (1.0 + ref_idx)).powi(2);
+        r0 + (1.0 - r0) * (1.0 - cosine).powi(5)
+    }
+}
+
 impl Scatter for Metal {
     fn scatter(&self, r_in: &Ray, rec: &HitRecord) -> Option<(Color, Ray)> {
         let reflected = r_in.direction().reflect(rec.normal).normalized();
@@ -46,14 +60,6 @@ impl Scatter for Metal {
             Some((self.albedo, scattered))
         } else {
             None
-        }
-    }
-}
-
-impl Dielectric {
-    pub fn new(index_of_refraction: FloatT) -> Dielectric {
-        Dielectric {
-            ir: index_of_refraction
         }
     }
 }
@@ -81,17 +87,23 @@ impl Scatter for Dielectric {
             self.ir
         };
 
-        let unit_dir = r_in.direction().normalized();
-        let cos_theta = ((-1.0) * unit_dir).dot(rec.normal).min(1.0);
+        let unit_direction = r_in.direction().normalized();
+
+        let cos_theta = ((-1.0) * unit_direction).dot(rec.normal).min(1.0);
         let sin_theta = (1.0 - cos_theta.powi(2)).sqrt();
 
-        let direction = if refraction_ratio * sin_theta > 1.0 {
-            unit_dir.reflect(rec.normal)
+        let mut rng = rand::thread_rng();
+        let cannot_refract = refraction_ratio * sin_theta > 1.0;
+        let will_reflect = rng.gen::<f64>() < Self::reflectance(cos_theta, refraction_ratio);
+
+        let direction = if cannot_refract || will_reflect {
+            unit_direction.reflect(rec.normal)
         } else {
-            unit_dir.refract(rec.normal, refraction_ratio)
+            unit_direction.refract(rec.normal, refraction_ratio)
         };
 
         let scattered = Ray::new(rec.p, direction);
+
         Some((Color::new(1.0, 1.0, 1.0), scattered))
     }
 }
