@@ -3,25 +3,48 @@ mod ray;
 mod hit;
 mod sphere;
 mod camera;
+mod material;
 
-use std::io::{stderr, Write};
-use rand::{thread_rng, Rng};
-
-use vec::{Vec3, Point3, Color, FloatT};
+use vec::{Point3, Color, FloatT};
 use ray::Ray;
 use hit::{Hit, World};
 use sphere::Sphere;
 use camera::Camera;
+use material::{Lambertian, Metal};
 
-fn ray_color(r: &Ray, world: &World) -> Color {
+use std::io::{stderr, Write};
+use rand::{Rng, thread_rng};
+use std::rc::Rc;
 
-    if let Some(rec) = world.hit(r, 0.0, FloatT::INFINITY)  {
-        0.5 * (rec.normal + Color::new(1.0, 1.0, 1.0))
+fn print_type_of<T>(_: &T) {
+    println!("{}", std::any::type_name::<T>())
+}
+
+fn ray_color(r: &Ray, world: &World, depth: u64) -> Color {
+    // Maximum ray-bounce depth has been reached
+    if depth <= 0 {
+        return Color::default();
+    }
+
+    if let Some(rec) = world.hit(r, 0.001, FloatT::INFINITY)  {
+        if let Some((attenuation, scattered)) = rec.mat.scatter(r, &rec) {
+            print_type_of(&ray_color(&scattered, world, depth - 1));
+            print_type_of(&attenuation);
+            //Color::default()
+            attenuation * ray_color(&scattered, world, depth - 1)
+        } else {
+            Color::default()
+        }
     } else {
         let unit_dir = r.direction().normalized();
         let t = 0.5 * (unit_dir.y() + 1.0);
         (1.0 - t) * Color::new(1.0, 1.0, 1.0) + t * Color::new(0.5, 0.7, 1.0)
-    }
+    } 
+    // Two scattering methods       
+    // Lambertian scattering
+    // let target = rec.p + rec.normal + Vec3::random_in_unit_sphere().normalized();
+    // Hemisphere scattering
+    // let target = rec.p + Vec3::random_in_hemisphere(rec.normal);
 }
 
 // https://misterdanb.github.io/raytracinginrust/#outputanimage/theppmimageformat
@@ -32,12 +55,24 @@ fn main()
     const IMAGE_WIDTH: u64 = 256;
     const IMAGE_HEIGHT: u64 = ((IMAGE_WIDTH as FloatT) / ASPECT_RATIO) as u64;
     const SAMPLES_PER_PIXEL: u64 = 100;
+    const MAX_DEPTH: u64 = 5;
 
     // World
     let mut world = World::new();
-    world.push(Box::new(Sphere::new(Point3::new(0.0, 0.0, -1.0), 0.5)));
-    world.push(Box::new(Sphere::new(Point3::new(0.0, -100.5, -1.0), 100.0)));
+    let mat_ground = Rc::new(Lambertian::new(Color::new(0.8, 0.8, 0.0)));
+    let mat_center = Rc::new(Lambertian::new(Color::new(0.7, 0.3, 0.3)));
+    let mat_left = Rc::new(Metal::new(Color::new(0.8, 0.8, 0.8)));
+    let mat_right = Rc::new(Metal::new(Color::new(0.8, 0.6, 0.2)));
 
+    let sphere_ground = Sphere::new(Point3::new(0.0, -100.5, -1.0), 100.0, mat_ground);
+    let sphere_center = Sphere::new(Point3::new(0.0, 0.0, -1.0), 0.5, mat_center);
+    let sphere_left = Sphere::new(Point3::new(-1.0, 0.0, -1.0), 0.5, mat_left);
+    let sphere_right = Sphere::new(Point3::new(1.0, 0.0, -1.0), 0.5, mat_right);
+
+    world.push(Box::new(sphere_ground));
+    world.push(Box::new(sphere_center));
+    world.push(Box::new(sphere_left));
+    world.push(Box::new(sphere_right));
 
     // Camera
     let cam = Camera::new();
@@ -63,7 +98,7 @@ fn main()
                 let v = ((j as FloatT) + random_v) / ((IMAGE_HEIGHT - 1) as FloatT);
     
                 let r = cam.get_ray(u, v);
-                pixel_color += ray_color(&r, &world);
+                pixel_color += ray_color(&r, &world, MAX_DEPTH);
             }
             println!("{}", pixel_color.format_color(SAMPLES_PER_PIXEL));
         }

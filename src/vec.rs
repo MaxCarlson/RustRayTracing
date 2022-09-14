@@ -1,6 +1,8 @@
-use std::ops::{Index, IndexMut, Add, AddAssign, Sub, SubAssign, Mul, MulAssign, Div, DivAssign};
+use std::ops::{Index, IndexMut, Add, AddAssign, Sub, SubAssign, Mul, MulAssign, Div, DivAssign, Range};
 use std::fmt;
 use std::fmt::Display;
+use rand::{Rng, thread_rng};
+
 
 pub type FloatT = f64;
 
@@ -52,11 +54,47 @@ impl Vec3 {
     pub fn normalized(self) -> Vec3 {
         self / self.length()
     }
+
+    pub fn reflect(self, n: Vec3) -> Vec3 {
+        self - 2.0 * self.dot(n) * n
+    }
+
+    pub fn random(r: Range<FloatT>) -> Vec3 {
+        let mut rng = thread_rng();
+        Vec3 {
+            e: [rng.gen_range(r.clone()), rng.gen_range(r.clone()), rng.gen_range(r.clone())]
+        }
+    }
+
+    pub fn random_in_unit_sphere() -> Vec3 {
+        loop {
+            let v = Vec3::random(-1.0..1.0);
+            if v.length() < 1.0 {
+                return v;
+            }
+        }
+    }
+
+    pub fn random_in_hemisphere(normal: Vec3) -> Vec3 {
+        let in_unit_sphere = Self::random_in_unit_sphere();
+
+        // In the same hemisphere as normal
+        if in_unit_sphere.dot(normal) > 0.0 {
+            in_unit_sphere
+        } else {
+            (-1.0) * in_unit_sphere
+        }
+    }
+
+    pub fn near_zero(self) -> bool {
+        const EPS: FloatT = 1.0e-8;
+        self.x().abs() < EPS && self.y().abs() < EPS && self.z().abs() < EPS
+    }
     
     pub fn format_color(self, samples_per_pixel: u64) -> String {
-        let ir = (256.0 * (self.x() / (samples_per_pixel as FloatT)).clamp(0.0, 0.999)) as u64;
-        let ig = (256.0 * (self.y() / (samples_per_pixel as FloatT)).clamp(0.0, 0.999)) as u64;
-        let ib = (256.0 * (self.z() / (samples_per_pixel as FloatT)).clamp(0.0, 0.999)) as u64;
+        let ir = (256.0 * (self.x() / (samples_per_pixel as FloatT)).sqrt().clamp(0.0, 0.999)) as u64;
+        let ig = (256.0 * (self.y() / (samples_per_pixel as FloatT)).sqrt().clamp(0.0, 0.999)) as u64;
+        let ib = (256.0 * (self.z() / (samples_per_pixel as FloatT)).sqrt().clamp(0.0, 0.999)) as u64;
 
         format!("{} {} {}", ir, ig, ib)
     }
@@ -94,12 +132,21 @@ impl AddAssign for Vec3 {
     }
 }
 
-impl Sub for Vec3 {
+impl Sub<Vec3> for Vec3 {
     type Output = Vec3;
 
     fn sub(self, other: Vec3) -> Vec3 {
         Vec3 {
             e: [self[0] - other[0], self[1] - other[1], self[2] - other[2]]
+        }
+    }
+}
+
+impl Sub<FloatT> for Vec3 {
+    type Output = Vec3;
+    fn sub(self, other: FloatT) -> Vec3 {
+        Vec3 {
+            e: [self[0] - other, self[1] - other, self[2] - other]
         }
     }
 }
@@ -127,6 +174,16 @@ impl MulAssign<FloatT> for Vec3 {
         *self = Vec3 {
             e: [self[0] * other, self[1] * other, self[2] * other]
         };
+    }
+}
+
+impl Mul<Vec3> for Vec3 {
+    type Output = Vec3;
+
+    fn mul(self, other: Vec3) -> Vec3 {
+        Vec3 {
+            e: [self[0] * other[0], self[0] * other[1], self[0] * other[2]]
+        }
     }
 }
 
