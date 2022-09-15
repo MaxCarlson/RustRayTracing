@@ -16,6 +16,8 @@ use std::io::{stderr, Write};
 use rand::{Rng, thread_rng};
 use std::sync::Arc;
 use rayon::prelude::*;
+use std::fs::File;
+
 
 fn print_type_of<T>(_: &T) {
     println!("{}", std::any::type_name::<T>())
@@ -106,14 +108,15 @@ fn random_scene() -> World {
 fn main() {
     // Image
     const ASPECT_RATIO: FloatT = 16.0 / 9.0;
-    const IMAGE_WIDTH: u64 = 1200;
+    const IMAGE_WIDTH: u64 = 1024;
     const IMAGE_HEIGHT: u64 = ((IMAGE_WIDTH as FloatT) / ASPECT_RATIO) as u64;
-    const SAMPLES_PER_PIXEL: u64 = 400;
-    const MAX_DEPTH: u64 = 25;
+    const SAMPLES_PER_PIXEL: u64 = 64;
+    const MAX_DEPTH: u64 = 64;
 
     // World
     let world = random_scene();
-
+    
+    //let mut world = World::new();
     //let mat_ground = Arc::new(Lambertian::new(Color::new(0.8, 0.8, 0.0)));
     //let mat_center = Arc::new(Lambertian::new(Color::new(0.1, 0.2, 0.5)));
     //let mat_left = Arc::new(Dielectric::new(1.5));
@@ -148,9 +151,13 @@ fn main() {
                         aperture,
                         dist_to_focus);
 
-    println!("P3");
-    println!("{} {}", IMAGE_WIDTH, IMAGE_HEIGHT);
-    println!("255");
+    let filename = "./image.ppm";
+    let mut buffer = File::create(filename).unwrap();
+    
+    writeln!(&mut buffer, "P3");
+    writeln!(&mut buffer, "{} {}", IMAGE_WIDTH, IMAGE_HEIGHT);
+    writeln!(&mut buffer, "255");
+
 
     //let mut count = 0;
     for j in (0..IMAGE_HEIGHT).rev()
@@ -175,24 +182,8 @@ fn main() {
         }).collect();
 
         for pixel_color in scanline {
-            println!("{}", pixel_color.format_color(SAMPLES_PER_PIXEL));
+            writeln!(&mut buffer, "{}", pixel_color.format_color(SAMPLES_PER_PIXEL));
         }
-        
-        //for i in 0..IMAGE_WIDTH
-        //{
-        //    let mut rng = thread_rng();
-        //    let mut pixel_color = Color::default();
-        //    for _ in 0..SAMPLES_PER_PIXEL {
-        //        let random_u: FloatT = rng.gen();
-        //        let random_v: FloatT = rng.gen();
-        //        let u = ((i as FloatT) + random_u) / ((IMAGE_WIDTH - 1) as FloatT);
-        //        let v = ((j as FloatT) + random_v) / ((IMAGE_HEIGHT - 1) as FloatT);
-        //        let r = cam.get_ray(u, v);
-        //        pixel_color += ray_color(&r, &world, MAX_DEPTH);
-        //    }
-        //    println!("{}", pixel_color.format_color(SAMPLES_PER_PIXEL));
-        //    count += 1;
-        //}
     }
     eprintln!("Done");
 }
