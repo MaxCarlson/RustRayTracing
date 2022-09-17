@@ -5,6 +5,7 @@ mod sphere;
 mod camera;
 mod material;
 mod light; 
+mod aabb;
 
 use vec::{Vec3, Point3, Color, FloatT};
 use ray::Ray;
@@ -12,7 +13,8 @@ use hit::{Hit, World};
 use sphere::Sphere;
 use camera::Camera;
 use material::{Lambertian, Metal, Dielectric};
-use light::{Light, Lights};
+use light::{Light, Lights, LightHit};
+use aabb::*;
 
 use std::io::{stderr, Write};
 use rand::{Rng, thread_rng, random};
@@ -21,11 +23,14 @@ use rayon::prelude::*;
 use std::fs::File;
 
 
+const SUN_LUMINOCITY: FloatT = 1.0;
+const LIGHT_LUMONICITY: FloatT = 1.0;
+
 fn print_type_of<T>(_: &T) {
     println!("{}", std::any::type_name::<T>())
 }
 
-fn ray_color(r: &Ray, world: &World, depth: u64) -> Color {
+fn ray_color(r: &Ray, world: &World, lights: &Lights, depth: u64) -> Color {
     // Maximum ray-bounce depth has been reached
     if depth <= 0 {
         return Color::default();
@@ -33,15 +38,15 @@ fn ray_color(r: &Ray, world: &World, depth: u64) -> Color {
 
     if let Some(rec) = world.hit(r, 0.001, FloatT::INFINITY)  {
         if let Some((attenuation, scattered)) = rec.mat.scatter(r, &rec) {
-            attenuation * ray_color(&scattered, world, depth - 1)
+            attenuation * ray_color(&scattered, world, lights, depth - 1)
         } else {
             Color::default()
         }
     } else {
-        Color::default()
-        //let unit_dir = r.direction().normalized();
-        //let t = 0.5 * (unit_dir.y() + 1.0);
-        //(1.0 - t) * Color::new(1.0, 1.0, 1.0) + t * Color::new(0.5, 0.7, 1.0)
+        //Color::default()
+        let unit_dir = r.direction().normalized();
+        let t = 0.5 * (unit_dir.y() + 1.0);
+        ((1.0 - t) * Color::new(1.0, 1.0, 1.0) + t * Color::new(0.5, 0.7, 1.0)) * SUN_LUMINOCITY
     } 
 
     // Two scattering methods       
@@ -51,9 +56,10 @@ fn ray_color(r: &Ray, world: &World, depth: u64) -> Color {
     // let target = rec.p + Vec3::random_in_hemisphere(rec.normal);
 }
 
-fn random_scene() -> World {
+fn random_scene() -> (World, Lights) {
     let mut rng = rand::thread_rng();
     let mut world = World::new();
+    let mut lights = Lights::new(); 
 
     let ground_mat = Arc::new(Lambertian::new(Color::new(0.5, 0.5, 0.5)));
     let ground_sphere = Sphere::new(Point3::new(0.0, -1000.0, 0.0), 1000.0, ground_mat);
@@ -83,10 +89,9 @@ fn random_scene() -> World {
 
                 world.push(Box::new(sphere));
             } else {
-                // Glass
-                // let sphere_mat = Arc::new(Dielectric::new(1.5));
-                // Dielectrics
-                let sphere_mat = Arc::new(Dielectric::new(rng.gen_range(0.01..20.0)));
+                // Glass / Dielectrics
+                let sphere_mat = Arc::new(Dielectric::new(1.5));
+                //let sphere_mat = Arc::new(Dielectric::new(rng.gen_range(0.01..20.0)));
                 let sphere = Sphere::new(center, 0.2, sphere_mat);
 
                 world.push(Box::new(sphere));
@@ -102,14 +107,18 @@ fn random_scene() -> World {
     let sphere2 = Sphere::new(Point3::new(-4.0, 1.0, 0.0), 1.0, mat2);
     let sphere3 = Sphere::new(Point3::new(4.0, 1.0, 0.0), 1.0, mat3);
 
+    let light1 = Light::new(Point3::new(0.0, 15.0, 0.0), Color::new(1.0, 1.0, 1.0), Vec3::new(0.0, -1.0, 0.0), LIGHT_LUMONICITY);
+
     world.push(Box::new(sphere1));
     world.push(Box::new(sphere2));
     world.push(Box::new(sphere3));
 
-    world
+    lights.push(Box::new(light1));
+
+    (world, lights)
 }
 
-fn debug_scene() -> World {
+fn debug_scene() -> (World, Lights) {
     let mut world = World::new();
     let mut lights = Lights::new(); 
 
@@ -125,7 +134,7 @@ fn debug_scene() -> World {
     let sphere_left_inner = Sphere::new(Point3::new(-1.0, 0.0, -1.0), -0.45, mat_left_inner);
     let sphere_right = Sphere::new(Point3::new(1.0, 0.0, -1.0), 0.5, mat_right);
 
-    let light1 = Light::new(Point3::new(0.0, 15.0, 0.0), Color::new(1.0, 1.0, 1.0), Vec3::new(0.0, -1.0, 0.0));
+    let light1 = Light::new(Point3::new(0.0, 15.0, 0.0), Color::new(1.0, 1.0, 1.0), Vec3::new(0.0, -1.0, 0.0), LIGHT_LUMONICITY);
 
     world.push(Box::new(sphere_ground));
     world.push(Box::new(sphere_center));
@@ -133,7 +142,9 @@ fn debug_scene() -> World {
     world.push(Box::new(sphere_left_inner));
     world.push(Box::new(sphere_right));   
 
-    world
+    lights.push(Box::new(light1));
+
+    (world, lights)
 }
 
 // https://misterdanb.github.io/raytracinginrust/#outputanimage/theppmimageformat
@@ -141,9 +152,9 @@ fn main() {
     
     // Image
     const ASPECT_RATIO: FloatT = 16.0 / 9.0;
-    let mut IMAGE_WIDTH: u64 = 1200;
+    let mut IMAGE_WIDTH: u64 = 768;
     let mut IMAGE_HEIGHT: u64 = ((IMAGE_WIDTH as FloatT) / ASPECT_RATIO) as u64;
-    let mut SAMPLES_PER_PIXEL: u64 = 32;
+    let mut SAMPLES_PER_PIXEL: u64 = 100;
     let mut MAX_DEPTH: u64 = 16;
 
     #[derive(Debug, PartialEq, Eq)]
@@ -153,26 +164,26 @@ fn main() {
         RUN
     }
 
-    let mut world = World::new();    
+    let (mut world, mut lights) = (World::new(), Lights::new());    
     //const runMode: Mode = Mode::DEBUG;
-    //const runMode: Mode = Mode::FAST_DEBUG;
-    const runMode: Mode = Mode::DEBUG;
+    const runMode: Mode = Mode::FAST_DEBUG;
+    //const runMode: Mode = Mode::DEBUG;
 
 
     if runMode == Mode::FAST_DEBUG {
-        world = debug_scene();
+        (world, lights) = debug_scene();
         IMAGE_WIDTH = 1200;
         IMAGE_HEIGHT = ((IMAGE_WIDTH as FloatT) / ASPECT_RATIO) as u64;
-        SAMPLES_PER_PIXEL = 8;
-        MAX_DEPTH = 8;
+        SAMPLES_PER_PIXEL = 100;
+        MAX_DEPTH = 9;
     } else if runMode == Mode::DEBUG {
-        world = random_scene();
+        (world, lights) = random_scene();
         IMAGE_WIDTH = 1200;
         IMAGE_HEIGHT = ((IMAGE_WIDTH as FloatT) / ASPECT_RATIO) as u64;
         SAMPLES_PER_PIXEL = 32;
         MAX_DEPTH = 16;
     } else {
-        world = random_scene();
+        (world, lights) = random_scene();
     }
 
     // Camera
@@ -216,7 +227,7 @@ fn main() {
                 let v = ((j as FloatT) + random_v) / ((IMAGE_HEIGHT - 1) as FloatT);
     
                 let r = cam.get_ray(u, v);
-                pixel_color += ray_color(&r, &world, MAX_DEPTH);
+                pixel_color += ray_color(&r, &world, &lights, MAX_DEPTH);
             }
             pixel_color
         }).collect();
