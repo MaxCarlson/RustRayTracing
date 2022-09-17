@@ -4,6 +4,7 @@ mod hit;
 mod sphere;
 mod camera;
 mod material;
+mod light; 
 
 use vec::{Vec3, Point3, Color, FloatT};
 use ray::Ray;
@@ -11,9 +12,10 @@ use hit::{Hit, World};
 use sphere::Sphere;
 use camera::Camera;
 use material::{Lambertian, Metal, Dielectric};
+use light::{Light, Lights};
 
 use std::io::{stderr, Write};
-use rand::{Rng, thread_rng};
+use rand::{Rng, thread_rng, random};
 use std::sync::Arc;
 use rayon::prelude::*;
 use std::fs::File;
@@ -36,9 +38,10 @@ fn ray_color(r: &Ray, world: &World, depth: u64) -> Color {
             Color::default()
         }
     } else {
-        let unit_dir = r.direction().normalized();
-        let t = 0.5 * (unit_dir.y() + 1.0);
-        (1.0 - t) * Color::new(1.0, 1.0, 1.0) + t * Color::new(0.5, 0.7, 1.0)
+        Color::default()
+        //let unit_dir = r.direction().normalized();
+        //let t = 0.5 * (unit_dir.y() + 1.0);
+        //(1.0 - t) * Color::new(1.0, 1.0, 1.0) + t * Color::new(0.5, 0.7, 1.0)
     } 
 
     // Two scattering methods       
@@ -81,7 +84,9 @@ fn random_scene() -> World {
                 world.push(Box::new(sphere));
             } else {
                 // Glass
-                let sphere_mat = Arc::new(Dielectric::new(1.5));
+                // let sphere_mat = Arc::new(Dielectric::new(1.5));
+                // Dielectrics
+                let sphere_mat = Arc::new(Dielectric::new(rng.gen_range(0.01..20.0)));
                 let sphere = Sphere::new(center, 0.2, sphere_mat);
 
                 world.push(Box::new(sphere));
@@ -104,36 +109,71 @@ fn random_scene() -> World {
     world
 }
 
+fn debug_scene() -> World {
+    let mut world = World::new();
+    let mut lights = Lights::new(); 
+
+    let mat_ground = Arc::new(Lambertian::new(Color::new(0.8, 0.8, 0.0)));
+    let mat_center = Arc::new(Lambertian::new(Color::new(0.1, 0.2, 0.5)));
+    let mat_left = Arc::new(Dielectric::new(1.5));
+    let mat_left_inner = Arc::new(Dielectric::new(1.5));
+    let mat_right = Arc::new(Metal::new(Color::new(0.8, 0.6, 0.2), 1.0));
+
+    let sphere_ground = Sphere::new(Point3::new(0.0, -100.5, -1.0), 100.0, mat_ground);
+    let sphere_center = Sphere::new(Point3::new(0.0, 0.0, -1.0), 0.5, mat_center);
+    let sphere_left = Sphere::new(Point3::new(-1.0, 0.0, -1.0), 0.5, mat_left);
+    let sphere_left_inner = Sphere::new(Point3::new(-1.0, 0.0, -1.0), -0.45, mat_left_inner);
+    let sphere_right = Sphere::new(Point3::new(1.0, 0.0, -1.0), 0.5, mat_right);
+
+    let light1 = Light::new(Point3::new(0.0, 15.0, 0.0), Color::new(1.0, 1.0, 1.0), Vec3::new(0.0, -1.0, 0.0));
+
+    world.push(Box::new(sphere_ground));
+    world.push(Box::new(sphere_center));
+    world.push(Box::new(sphere_left));
+    world.push(Box::new(sphere_left_inner));
+    world.push(Box::new(sphere_right));   
+
+    world
+}
+
 // https://misterdanb.github.io/raytracinginrust/#outputanimage/theppmimageformat
 fn main() {
+    
     // Image
     const ASPECT_RATIO: FloatT = 16.0 / 9.0;
-    const IMAGE_WIDTH: u64 = 1024;
-    const IMAGE_HEIGHT: u64 = ((IMAGE_WIDTH as FloatT) / ASPECT_RATIO) as u64;
-    const SAMPLES_PER_PIXEL: u64 = 64;
-    const MAX_DEPTH: u64 = 64;
+    let mut IMAGE_WIDTH: u64 = 1200;
+    let mut IMAGE_HEIGHT: u64 = ((IMAGE_WIDTH as FloatT) / ASPECT_RATIO) as u64;
+    let mut SAMPLES_PER_PIXEL: u64 = 32;
+    let mut MAX_DEPTH: u64 = 16;
 
-    // World
-    let world = random_scene();
-    
-    //let mut world = World::new();
-    //let mat_ground = Arc::new(Lambertian::new(Color::new(0.8, 0.8, 0.0)));
-    //let mat_center = Arc::new(Lambertian::new(Color::new(0.1, 0.2, 0.5)));
-    //let mat_left = Arc::new(Dielectric::new(1.5));
-    //let mat_left_inner = Arc::new(Dielectric::new(1.5));
-    //let mat_right = Arc::new(Metal::new(Color::new(0.8, 0.6, 0.2), 1.0));
-//
-    //let sphere_ground = Sphere::new(Point3::new(0.0, -100.5, -1.0), 100.0, mat_ground);
-    //let sphere_center = Sphere::new(Point3::new(0.0, 0.0, -1.0), 0.5, mat_center);
-    //let sphere_left = Sphere::new(Point3::new(-1.0, 0.0, -1.0), 0.5, mat_left);
-    //let sphere_left_inner = Sphere::new(Point3::new(-1.0, 0.0, -1.0), -0.45, mat_left_inner);
-    //let sphere_right = Sphere::new(Point3::new(1.0, 0.0, -1.0), 0.5, mat_right);
-//
-    //world.push(Box::new(sphere_ground));
-    //world.push(Box::new(sphere_center));
-    //world.push(Box::new(sphere_left));
-    //world.push(Box::new(sphere_left_inner));
-    //world.push(Box::new(sphere_right));
+    #[derive(Debug, PartialEq, Eq)]
+    pub enum Mode {
+        FAST_DEBUG,
+        DEBUG,
+        RUN
+    }
+
+    let mut world = World::new();    
+    //const runMode: Mode = Mode::DEBUG;
+    //const runMode: Mode = Mode::FAST_DEBUG;
+    const runMode: Mode = Mode::DEBUG;
+
+
+    if runMode == Mode::FAST_DEBUG {
+        world = debug_scene();
+        IMAGE_WIDTH = 1200;
+        IMAGE_HEIGHT = ((IMAGE_WIDTH as FloatT) / ASPECT_RATIO) as u64;
+        SAMPLES_PER_PIXEL = 8;
+        MAX_DEPTH = 8;
+    } else if runMode == Mode::DEBUG {
+        world = random_scene();
+        IMAGE_WIDTH = 1200;
+        IMAGE_HEIGHT = ((IMAGE_WIDTH as FloatT) / ASPECT_RATIO) as u64;
+        SAMPLES_PER_PIXEL = 32;
+        MAX_DEPTH = 16;
+    } else {
+        world = random_scene();
+    }
 
     // Camera
     let lookfrom = Point3::new(13.0, 2.0, 3.0);
@@ -143,13 +183,13 @@ fn main() {
     let aperture = 0.1;
     let fov = 20.0;
 
-    let cam = Camera::new(Point3::new(-2.0, 2.0, 1.0),
-                        Point3::new(0.0, 0.0, -1.0),
-                        Vec3::new(0.0, 1.0, 0.0),
-                        fov,
-                        ASPECT_RATIO,
-                        aperture,
-                        dist_to_focus);
+    let cam = Camera::new(lookfrom,
+                          lookat,
+                          vup,
+                          fov,
+                          ASPECT_RATIO,
+                          aperture,
+                          dist_to_focus);
 
     let filename = "./image.ppm";
     let mut buffer = File::create(filename).unwrap();
@@ -187,3 +227,19 @@ fn main() {
     }
     eprintln!("Done");
 }
+
+//// Python
+//def main():
+//    print("Hello World")
+//
+//// C++
+//#include <iostream>
+//void main()
+//{
+//    stdd::cout << "Hello World" << std::endl;
+//}
+//
+////Rust
+//fn main() {
+//    eprintln!("Hello World");
+//}
