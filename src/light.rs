@@ -37,7 +37,7 @@ impl LightHit for Lights {
             let len = dir.length();
 
             for o in world {
-                if let Some(trec) = o.hit(&r, 0.0001, len) {
+                if let (b, Some(trec)) = o.hit(&r, 0.0001, len) {
                     return Color::default();
                 }
             }

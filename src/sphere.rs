@@ -2,6 +2,7 @@ use super::vec::{Point3, Vec3, FloatT};
 use super::ray::Ray;
 use super::hit::{Hit, HitRecord};
 use super::material::Scatter;
+
 use std::sync::Arc;
 
 pub struct Sphere {
@@ -21,7 +22,7 @@ impl Sphere {
 }
 
 impl Hit for Sphere {
-    fn hit(&self, r: &Ray, t_min: FloatT, t_max: FloatT) -> Option<HitRecord> {
+    fn hit(&self, r: &Ray, t_min: FloatT, t_max: FloatT) -> (bool, Option<HitRecord>) {
         let oc = r.origin() - self.center;
         let a = r.direction().length().powi(2);
         let half_b = oc.dot(r.direction());
@@ -29,7 +30,7 @@ impl Hit for Sphere {
 
         let discriminant = half_b.powi(2) - a * c;
         if discriminant < 0.0 {
-            return None;
+            return (false, None);
         }
 
         // Find nearest root
@@ -38,7 +39,7 @@ impl Hit for Sphere {
         if root < t_min || t_max < root {
             root = (-half_b + sqrtd) / a;
             if root < t_min || t_max < root {
-                return None;
+                return (false, None);
             }
         }
 
@@ -52,6 +53,6 @@ impl Hit for Sphere {
         let outward_normal = (rec.p - self.center) / self.radius;
         rec.set_face_normal(r, outward_normal);
         
-        Some(rec)
+        (true, Some(rec))
     }
 }

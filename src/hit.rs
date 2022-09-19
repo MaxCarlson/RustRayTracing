@@ -1,8 +1,8 @@
 use super::vec::{Vec3, Point3, FloatT};
 use super::ray::Ray;
 use super::material::Scatter;
-use std::sync::Arc;
 
+use std::sync::Arc;
 
 pub struct HitRecord {
     pub p: Point3,
@@ -25,23 +25,24 @@ impl HitRecord {
 }
 
 pub trait Hit : Send + Sync {
-    fn hit(&self, r: &Ray, t_min: FloatT, t_max: FloatT) -> Option<HitRecord>;
+    fn hit(&self, r: &Ray, t_min: FloatT, t_max: FloatT) -> (bool, Option<HitRecord>);
+    //fn bounding_box(&self) -> Option<AABB>;
 }
 
 pub type World = Vec<Box<dyn Hit>>;
 
 impl Hit for World {
-    fn hit(&self, r: &Ray, t_min: FloatT, t_max: FloatT) -> Option<HitRecord> {
+    fn hit(&self, r: &Ray, t_min: FloatT, t_max: FloatT) -> (bool, Option<HitRecord>) {
         let mut tmp_rec = None;
         let mut closest = t_max;
 
         // Find the closest object that the ray intersects
         for object in self {
-            if let Some(rec) = object.hit(r, t_min, closest) {
+            if let (b, Some(rec)) = object.hit(r, t_min, closest) {
                 closest = rec.t;
                 tmp_rec = Some(rec);
             }
         }
-        tmp_rec
+        (true, tmp_rec)
     }
 }

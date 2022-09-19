@@ -6,6 +6,8 @@ mod camera;
 mod material;
 mod light; 
 mod aabb;
+mod object;
+mod bvh;
 
 use vec::{Vec3, Point3, Color, FloatT};
 use ray::Ray;
@@ -36,7 +38,7 @@ fn ray_color(r: &Ray, world: &World, lights: &Lights, depth: u64) -> Color {
         return Color::default();
     }
 
-    if let Some(rec) = world.hit(r, 0.001, FloatT::INFINITY)  {
+    if let (h, Some(rec)) = world.hit(r, 0.001, FloatT::INFINITY)  {
         if let Some((attenuation, scattered)) = rec.mat.scatter(r, &rec) {
             attenuation * ray_color(&scattered, world, lights, depth - 1)
         } else {
